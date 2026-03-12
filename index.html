@@ -183,7 +183,7 @@ const ZCTA_LAYERS = [1, 4, 7]; // ZCTA5 2020 candidates
 
 function makeGeoid(fips, num, type){
   if(type==='CD') return fips + String(num).padStart(2,'0');   // 4 chars: FL CD-3 = "1203"
-  if(type==='SD') return fips + String(num).padStart(2,'0');   // 4 chars: AL SD-1 = "0101"
+  if(type==='SD') return fips + String(num).padStart(3,'0');   // 5 chars: AL SD-1 = "01001"
   return fips + String(num).padStart(3,'0');                    // 5 chars: TX HD-14 = "48014"
 }
 
