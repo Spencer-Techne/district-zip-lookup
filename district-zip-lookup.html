@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>District → ZIP Lookup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0b0d12;
+    --surface: #13161f;
+    --surface2: #1a1e2b;
+    --border: #252836;
+    --border2: #2e3347;
+    --text: #e2e4ed;
+    --text2: #7c8099;
+    --text3: #4a4e63;
+    --accent: #4e7fff;
+    --accent-dim: #1c2d55;
+    --green: #2ecc8a;
+    --green-dim: #0d2e20;
+    --yellow: #f0b429;
+    --yellow-dim: #2a2008;
+    --red: #f05252;
+    --red-dim: #2a1010;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    padding: 40px 24px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 36px; gap: 16px; }
+  .eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; }
+  h1 { font-size: 26px; font-weight: 600; color: #fff; letter-spacing: -0.02em; line-height: 1.2; }
+  .sub { font-size: 13px; color: var(--text2); margin-top: 5px; }
+  .ver-badge { font-family: var(--mono); font-size: 10px; color: var(--text3); border: 1px solid var(--border2); padding: 3px 8px; border-radius: 4px; white-space: nowrap; margin-top: 4px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 22px 24px; margin-bottom: 16px; }
+  .field-label { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; display: block; }
+  textarea { width: 100%; background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 12px 14px; resize: vertical; min-height: 90px; outline: none; transition: border-color 0.15s; line-height: 1.7; }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--text3); }
+  .hint-row { display: flex; align-items: flex-start; gap: 20px; margin-top: 10px; flex-wrap: wrap; }
+  .hint { font-size: 12px; color: var(--text3); }
+  .format-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-family: var(--mono); font-size: 11px; background: var(--surface2); border: 1px solid var(--border2); color: var(--text2); padding: 2px 8px; border-radius: 3px; cursor: pointer; transition: all 0.12s; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-row { display: flex; gap: 8px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+  button { font-family: var(--sans); font-size: 13px; font-weight: 600; border: none; border-radius: 5px; padding: 9px 18px; cursor: pointer; transition: all 0.12s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3a6de8; }
+  .btn-primary:disabled { background: var(--surface2); color: var(--text3); cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { border-color: var(--border); color: var(--text); }
+  .btn-dl { background: var(--green-dim); color: var(--green); border: 1px solid #1a5c3f; margin-left: auto; }
+  .btn-dl:hover { background: #0f3d28; }
+  .status { font-size: 13px; padding: 10px 14px; border-radius: 6px; margin-top: 12px; display: none; font-family: var(--mono); line-height: 1.6; }
+  .status.show { display: block; }
+  .status.loading { background: var(--accent-dim); color: #93b4ff; border: 1px solid #1c3d8f; }
+  .status.error { background: var(--red-dim); color: #fca5a5; border: 1px solid #6b1c1c; }
+  .status.success { background: var(--green-dim); color: #86efac; border: 1px solid #14532d; }
+  .status.warn { background: var(--yellow-dim); color: #fde68a; border: 1px solid #713f12; }
+  .spinner { display: inline-block; width: 11px; height: 11px; border: 2px solid #1d4ed8; border-top-color: #93b4ff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .results-title { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .pill { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 3px; background: var(--accent-dim); color: var(--accent); border: 1px solid #1c3d8f; }
+  .pill.green { background: var(--green-dim); color: var(--green); border-color: #14532d; }
+  .district-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .dtag { font-family: var(--mono); font-size: 11px; padding: 3px 10px; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border2); color: var(--text2); display: flex; align-items: center; gap: 6px; }
+  .dtag .count { color: var(--text3); }
+  .dtag.empty { border-color: #6b1c1c; color: var(--red); }
+  .table-wrap { overflow-x: auto; border-radius: 6px; border: 1px solid var(--border); max-height: 420px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  th { background: var(--surface2); color: var(--text2); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 9px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; border-right: 1px solid var(--border); position: sticky; top: 0; }
+  th:last-child { border-right: none; }
+  td { padding: 5px 16px; color: var(--text); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+  td:last-child { border-right: none; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .notice { font-size: 11px; color: var(--text3); margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-family: var(--mono); line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="eyebrow">Targeting Tool</div>
+      <h1>District → ZIP Lookup</h1>
+      <div class="sub">Enter legislative or congressional districts. Export ZIPs as a CSV.</div>
+    </div>
+    <div class="ver-badge">Census 2020 Data</div>
+  </div>
+
+  <div class="card">
+    <label class="field-label">Districts</label>
+    <textarea id="districtInput" placeholder="AL SD-1, FL CD-3&#10;TX HD-14, NC SD-6&#10;&#10;One per line or comma-separated"></textarea>
+    <div class="hint-row">
+      <div class="hint">Types: SD = State Senate &nbsp;·&nbsp; HD = State House &nbsp;·&nbsp; CD = Congressional</div>
+      <div class="format-chips">
+        <span class="chip" onclick="addEx('FL CD-3')">FL CD-3</span>
+        <span class="chip" onclick="addEx('AL SD-1')">AL SD-1</span>
+        <span class="chip" onclick="addEx('TX HD-14')">TX HD-14</span>
+        <span class="chip" onclick="addEx('NJ CD-7')">NJ CD-7</span>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="lookupBtn" onclick="runLookup()">Look Up ZIPs</button>
+      <button class="btn-ghost" onclick="clearAll()">Clear</button>
+    </div>
+    <div class="status" id="statusMsg"></div>
+  </div>
+
+  <div class="card" id="resultsCard" style="display:none">
+    <div class="results-header">
+      <div class="results-title">Results <span class="pill green" id="totalPill"></span></div>
+      <button class="btn-dl" onclick="downloadCSV()">⬇ Download CSV</button>
+    </div>
+    <div class="district-tags" id="tagRow"></div>
+    <div class="table-wrap">
+      <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+    </div>
+    <div class="notice" id="noticeBlock"></div>
+  </div>
+</div>
+
+<script>
+const FIPS = {
+  AL:'01',AK:'02',AZ:'04',AR:'05',CA:'06',CO:'08',CT:'09',DE:'10',DC:'11',
+  FL:'12',GA:'13',HI:'15',ID:'16',IL:'17',IN:'18',IA:'19',KS:'20',KY:'21',
+  LA:'22',ME:'23',MD:'24',MA:'25',MI:'26',MN:'27',MS:'28',MO:'29',MT:'30',
+  NE:'31',NV:'32',NH:'33',NJ:'34',NM:'35',NY:'36',NC:'37',ND:'38',OH:'39',
+  OK:'40',OR:'41',PA:'42',RI:'44',SC:'45',SD:'46',TN:'47',TX:'48',UT:'49',
+  VT:'50',VA:'51',WA:'53',WV:'54',WI:'55',WY:'56'
+};
+
+let currentResults = {};
+let currentKeys = [];
+const relCache = {};
+
+function addEx(v) {
+  const el = document.getElementById('districtInput');
+  const c = el.value.trim();
+  el.value = c ? c + '\n' + v : v;
+  el.focus();
+}
+
+function clearAll() {
+  document.getElementById('districtInput').value = '';
+  document.getElementById('statusMsg').className = 'status';
+  document.getElementById('resultsCard').style.display = 'none';
+  currentResults = {}; currentKeys = [];
+}
+
+function showStatus(type, html) {
+  const el = document.getElementById('statusMsg');
+  el.className = 'status show ' + type;
+  el.innerHTML = html;
+}
+
+function parseDistricts(raw) {
+  return raw.split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean).map(s => {
+    const m = s.match(/^([A-Z]{2})\s+(SD|HD|CD|SH|SS)-?(\d+)$/);
+    if (!m) return { raw: s, valid: false };
+    let type = m[2];
+    if (type==='SH') type='HD';
+    if (type==='SS') type='SD';
+    const num = parseInt(m[3], 10);
+    return { raw: s, state: m[1], type, num, key: `${m[1]} ${type}-${num}`, valid: true };
+  });
+}
+
+async function fetchZIPs(d) {
+  const fips = FIPS[d.state];
+  if (!fips) throw new Error('Unknown state: ' + d.state);
+  const pf = fips.padStart(2,'0');
+  if (d.type === 'CD') return queryAPI(pf, d.num.toString().padStart(2,'0'), 'congressional%20district', 'cd');
+  if (d.type === 'SD') return queryAPI(pf, d.num.toString().padStart(3,'0'), 'sldu', 'sldu');
+  return queryAPI(pf, d.num.toString().padStart(3,'0'), 'sldl', 'sldl');
+}
+
+async function queryAPI(fips, dist, param, fileKey) {
+  const url = `https://api.census.gov/data/2020/dec/pl?get=NAME&for=zip%20code%20tabulation%20area:*&in=state:${fips}%20${param}:${dist}`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const last = data[0].length - 1;
+    return data.slice(1).map(row => row[last]).filter(z => /^\d{5}$/.test(z)).sort();
+  } catch(e) {
+    return fallback(fips, dist, fileKey);
+  }
+}
+
+const FILE_URLS = {
+  cd:   'https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_cd11820_natl.txt',
+  sldu: 'https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_sldu20_natl.txt',
+  sldl: 'https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_sldl20_natl.txt'
+};
+
+async function fallback(fips, dist, fileKey) {
+  if (!relCache[fileKey]) {
+    const r = await fetch(FILE_URLS[fileKey] || FILE_URLS.cd, { signal: AbortSignal.timeout(30000) });
+    if (!r.ok) throw new Error('Relationship file unavailable');
+    relCache[fileKey] = await r.text();
+  }
+  const lines = relCache[fileKey].split('\n');
+  const h = lines[0].split('|').map(x => x.trim());
+  const zctaIdx = h.findIndex(x => /GEOID_ZCTA/i.test(x));
+  const stateIdx = h.findIndex(x => /^STATEFP/i.test(x));
+  const distIdx = h.findIndex(x => /GEOID_(?!ZCTA)/i.test(x));
+  if (zctaIdx < 0) throw new Error('Cannot parse relationship file');
+
+  const zips = new Set();
+  const target = fips + dist;
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const c = lines[i].split('|');
+    const ls = (c[stateIdx]||'').trim();
+    const ld = (c[distIdx]||'').trim();
+    if (ls === fips && (ld === target || ld.endsWith(dist))) {
+      const z = (c[zctaIdx]||'').trim();
+      if (/^\d{5}$/.test(z)) zips.add(z);
+    }
+  }
+  return [...zips].sort();
+}
+
+async function runLookup() {
+  const raw = document.getElementById('districtInput').value;
+  if (!raw.trim()) return;
+
+  const parsed = parseDistricts(raw);
+  const valid = parsed.filter(d => d.valid);
+  const invalid = parsed.filter(d => !d.valid);
+
+  if (!valid.length) {
+    showStatus('error', '⚠ No valid districts found. Use formats like: FL CD-3 · AL SD-1 · TX HD-14');
+    return;
+  }
+
+  const seen = new Set();
+  const deduped = valid.filter(d => { if (seen.has(d.key)) return false; seen.add(d.key); return true; });
+
+  showStatus('loading', `<span class="spinner"></span>Querying Census API for ${deduped.length} district${deduped.length>1?'s':''}… may take 10–30 seconds.`);
+  document.getElementById('lookupBtn').disabled = true;
+  document.getElementById('resultsCard').style.display = 'none';
+
+  currentResults = {};
+  currentKeys = deduped.map(d => d.key);
+  const errors = [];
+
+  await Promise.all(deduped.map(async d => {
+    try {
+      currentResults[d.key] = await fetchZIPs(d);
+      if (!currentResults[d.key].length) errors.push(`${d.key}: no data returned`);
+    } catch(e) {
+      currentResults[d.key] = [];
+      errors.push(`${d.key}: ${e.message}`);
+    }
+  }));
+
+  document.getElementById('lookupBtn').disabled = false;
+  const total = Object.values(currentResults).reduce((a,b) => a+b.length, 0);
+  const ok = Object.values(currentResults).filter(z => z.length > 0).length;
+
+  if (ok === 0) {
+    showStatus('error', `⚠ All lookups failed. The Census API may be temporarily down — try again in a moment.<br><small>${errors.slice(0,2).join(' | ')}</small>`);
+    return;
+  }
+
+  let msg = `Found ${total} ZIPs across ${ok}/${deduped.length} district${deduped.length>1?'s':''}.`;
+  if (invalid.length) msg += ` Skipped: ${invalid.map(d=>d.raw).join(', ')}`;
+  showStatus(errors.length ? 'warn' : 'success', msg);
+  renderResults(invalid);
+}
+
+function renderResults(invalid=[]) {
+  const keys = currentKeys;
+  const maxRows = Math.max(...keys.map(k => (currentResults[k]||[]).length), 0);
+
+  document.getElementById('tagRow').innerHTML =
+    keys.map(k => {
+      const n = (currentResults[k]||[]).length;
+      return `<div class="dtag${n===0?' empty':''}"><span>${k}</span><span class="count">${n} ZIPs</span></div>`;
+    }).join('') + invalid.map(d => `<div class="dtag empty">${d.raw} ✗</div>`).join('');
+
+  document.getElementById('totalPill').textContent = Object.values(currentResults).reduce((a,b)=>a+b.length,0) + ' ZIPs';
+
+  document.getElementById('tableHead').innerHTML = `<tr>${keys.map(k=>`<th>${k}</th>`).join('')}</tr>`;
+  let rows = '';
+  const preview = Math.min(maxRows, 500);
+  for (let i = 0; i < preview; i++) {
+    rows += `<tr>${keys.map(k=>`<td>${(currentResults[k]||[])[i]||''}</td>`).join('')}</tr>`;
+  }
+  if (maxRows > 500) {
+    rows += `<tr>${keys.map(()=>`<td style="color:var(--text3);font-size:11px">…more in CSV</td>`).join('')}</tr>`;
+  }
+  document.getElementById('tableBody').innerHTML = rows;
+
+  const notices = [
+    'Source: U.S. Census Bureau — 2020 Decennial Census / TIGER relationship files.',
+    'ZIPs reflect ZCTAs (ZIP Code Tabulation Areas) intersecting each district boundary.',
+    'ZCTAs approximate USPS ZIP codes but may not match 1:1 — verify against platform targeting.',
+  ];
+  if (maxRows > 500) notices.push(`Preview capped at 500 rows. Full ${maxRows.toLocaleString()} ZIPs included in CSV.`);
+  document.getElementById('noticeBlock').innerHTML = notices.join('<br>');
+  document.getElementById('resultsCard').style.display = 'block';
+}
+
+function downloadCSV() {
+  const keys = currentKeys.filter(k => currentResults[k]);
+  if (!keys.length) return;
+  const maxRows = Math.max(...keys.map(k=>(currentResults[k]||[]).length), 0);
+  let csv = keys.join(',') + '\r\n';
+  for (let i = 0; i < maxRows; i++) {
+    csv += keys.map(k=>(currentResults[k]||[])[i]||'').join(',') + '\r\n';
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `district_zips_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
