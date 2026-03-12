@@ -85,7 +85,7 @@
       <h1>District &rarr; ZIP Lookup</h1>
       <div class="sub">Enter legislative or congressional districts. Export ZIPs as a CSV.</div>
     </div>
-    <div class="ver-badge">TIGERweb &middot; v5</div>
+    <div class="ver-badge">TIGERweb TIGERweb &middot; v5middot; v6</div>
   </div>
 
   <div class="card">
@@ -182,8 +182,9 @@ const LAYER_IDS = { // CD=0 (119th), SD=1 (2024 SLDU), HD=2 (2024 SLDL)
 const ZCTA_LAYERS = [1, 4, 7]; // ZCTA5 2020 candidates
 
 function makeGeoid(fips, num, type){
-  if(type==='CD') return fips + String(num).padStart(2,'0');      // 4 chars
-  return fips + String(num).padStart(5,'0');                       // 7 chars
+  if(type==='CD') return fips + String(num).padStart(2,'0');   // 4 chars: FL CD-3 = "1203"
+  if(type==='SD') return fips + String(num).padStart(2,'0');   // 4 chars: AL SD-1 = "0101"
+  return fips + String(num).padStart(3,'0');                    // 5 chars: TX HD-14 = "48014"
 }
 
 async function tigerFetch(url){
