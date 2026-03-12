@@ -85,7 +85,7 @@
       <h1>District &rarr; ZIP Lookup</h1>
       <div class="sub">Enter legislative or congressional districts. Export ZIPs as a CSV.</div>
     </div>
-    <div class="ver-badge">TIGERweb &middot; v4</div>
+    <div class="ver-badge">TIGERweb &middot; v5</div>
   </div>
 
   <div class="card">
@@ -156,7 +156,7 @@ function parseDistricts(raw){
 }
 
 // ─── TIGERweb layer IDs ────────────────────────────────────────────────────────
-// Source: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/legislative/MapServer
+// Source: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Legislative/MapServer
 // Congressional Districts 119th Congress = layer 0 (current as of 2023+)
 // SLDU 2020 = layer 14 (State Legislative Districts - Upper - Census 2020)
 // SLDL 2020 = layer 16 (State Legislative Districts - Lower - Census 2020)
@@ -171,15 +171,15 @@ function parseDistricts(raw){
 
 const TIGER_BASE = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb';
 const ZCTA_SERVICE = `${TIGER_BASE}/PUMA_TAD_TAZ_UGA_ZCTA/MapServer`;
-const LEG_SERVICE = `${TIGER_BASE}/legislative/MapServer`;
+const LEG_SERVICE = `${TIGER_BASE}/Legislative/MapServer`;
 
 // Layer IDs to try in order (in case the primary is wrong)
-const LAYER_IDS = {
-  CD: [0, 1, 2, 3],        // Try 119th, 118th, 117th, 116th
-  SD: [14, 22, 26, 6],     // Try multiple SLDU layer candidates
-  HD: [16, 24, 28, 8],     // Try multiple SLDL layer candidates
+const LAYER_IDS = { // CD=0 (119th), SD=1 (2024 SLDU), HD=2 (2024 SLDL)
+  CD: [0, 4],        // Try 119th, 118th, 117th, 116th
+  SD: [1, 5],     // Try multiple SLDU layer candidates
+  HD: [2, 6],     // Try multiple SLDL layer candidates
 };
-const ZCTA_LAYERS = [4, 2, 0, 6]; // ZCTA5 2020 candidates
+const ZCTA_LAYERS = [1, 4, 7]; // ZCTA5 2020 candidates
 
 function makeGeoid(fips, num, type){
   if(type==='CD') return fips + String(num).padStart(2,'0');      // 4 chars
@@ -257,7 +257,7 @@ async function getZCTAsInBBox(bbox){
   
   for(const layerId of ZCTA_LAYERS){
     try{
-      const url=`${ZCTA_SERVICE}/${layerId}/query?geometry=${geomParam}&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&outFields=GEOID20,ZCTA5CE20,ZCTA5&returnGeometry=false&resultRecordCount=2000&f=json`;
+      const url=`${ZCTA_SERVICE}/${layerId}/query?geometry=${geomParam}&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&outFields=ZCTA5,GEOID&returnGeometry=false&resultRecordCount=2000&f=json`;
       const data=await tigerFetch(url);
       
       if(!data.features||data.features.length===0){
@@ -268,7 +268,7 @@ async function getZCTAsInBBox(bbox){
       dbg(`ZCTA layer ${layerId}: ${data.features.length} features`);
       const zips=data.features.map(f=>{
         const a=f.attributes;
-        return a.GEOID20||a.ZCTA5CE20||a.ZCTA5||'';
+        return a.ZCTA5||a.GEOID||a.GEOID20||a.ZCTA5CE20||'';
       }).filter(z=>/^\d{5}$/.test(z)).sort();
       
       return[...new Set(zips)];
