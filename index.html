@@ -35,15 +35,6 @@
   .format-chips { display:flex; gap:6px; flex-wrap:wrap; }
   .chip { font-family:var(--mono); font-size:11px; background:var(--surface2); border:1px solid var(--border2); color:var(--text2); padding:2px 8px; border-radius:3px; cursor:pointer; transition:all .12s; }
   .chip:hover { border-color:var(--accent); color:var(--accent); }
-  .api-section { border:1px solid var(--border2); border-radius:6px; padding:12px 16px; margin-top:14px; background:var(--bg); }
-  .api-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .api-label { font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); white-space:nowrap; }
-  .api-input { flex:1; min-width:200px; background:transparent; border:none; border-bottom:1px solid var(--border2); color:var(--text); font-family:var(--mono); font-size:12px; padding:4px 0; outline:none; }
-  .api-input:focus { border-bottom-color:var(--accent); }
-  .api-input::placeholder { color:var(--text3); }
-  .api-note { font-size:11px; color:var(--text3); margin-top:8px; font-family:var(--mono); }
-  .api-note a { color:var(--accent); text-decoration:none; }
-  .api-note a:hover { text-decoration:underline; }
   .btn-row { display:flex; gap:8px; margin-top:16px; align-items:center; flex-wrap:wrap; }
   button { font-family:var(--sans); font-size:13px; font-weight:600; border:none; border-radius:5px; padding:9px 18px; cursor:pointer; transition:all .12s; display:inline-flex; align-items:center; gap:6px; }
   .btn-primary { background:var(--accent); color:#fff; }
@@ -80,6 +71,10 @@
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:var(--surface2); }
   .notice { font-size:11px; color:var(--text3); margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-family:var(--mono); line-height:1.8; }
+  .debug-toggle { font-size:11px; color:var(--text3); cursor:pointer; margin-top:8px; display:inline-block; }
+  .debug-toggle:hover { color:var(--text2); }
+  .debug-box { display:none; background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:10px 12px; margin-top:8px; font-family:var(--mono); font-size:11px; color:var(--text3); white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; }
+  .debug-box.show { display:block; }
 </style>
 </head>
 <body>
@@ -90,7 +85,7 @@
       <h1>District &rarr; ZIP Lookup</h1>
       <div class="sub">Enter legislative or congressional districts. Export ZIPs as a CSV.</div>
     </div>
-    <div class="ver-badge">Census 2020 &middot; v3</div>
+    <div class="ver-badge">TIGERweb &middot; v4</div>
   </div>
 
   <div class="card">
@@ -105,19 +100,14 @@
         <span class="chip" onclick="addEx('NJ CD-7')">NJ CD-7</span>
       </div>
     </div>
-    <div class="api-section">
-      <div class="api-row">
-        <span class="api-label">Census API Key</span>
-        <input type="text" class="api-input" id="apiKeyInput" placeholder="Optional — improves rate limits" />
-      </div>
-      <div class="api-note">Free at <a href="https://api.census.gov/data/key_signup.html" target="_blank">api.census.gov/data/key_signup.html</a> &mdash; works without one but limited to ~500 req/day. Stored locally in your browser only.</div>
-    </div>
     <div class="btn-row">
       <button class="btn-primary" id="lookupBtn" onclick="runLookup()">&blacktriangleright; Look Up ZIPs</button>
       <button class="btn-ghost" onclick="clearAll()">Clear</button>
       <span style="font-size:12px;color:var(--text3);margin-left:4px;">&#8984;&crarr; to run</span>
     </div>
     <div class="status" id="statusMsg"></div>
+    <span class="debug-toggle" onclick="toggleDebug()">&#9660; show debug log</span>
+    <div class="debug-box" id="debugBox"></div>
   </div>
 
   <div class="card" id="resultsCard" style="display:none">
@@ -136,14 +126,23 @@
 <script>
 const FIPS={AL:'01',AK:'02',AZ:'04',AR:'05',CA:'06',CO:'08',CT:'09',DE:'10',DC:'11',FL:'12',GA:'13',HI:'15',ID:'16',IL:'17',IN:'18',IA:'19',KS:'20',KY:'21',LA:'22',ME:'23',MD:'24',MA:'25',MI:'26',MN:'27',MS:'28',MO:'29',MT:'30',NE:'31',NV:'32',NH:'33',NJ:'34',NM:'35',NY:'36',NC:'37',ND:'38',OH:'39',OK:'40',OR:'41',PA:'42',RI:'44',SC:'45',SD:'46',TN:'47',TX:'48',UT:'49',VT:'50',VA:'51',WA:'53',WV:'54',WI:'55',WY:'56'};
 let currentResults={},currentKeys=[];
+let debugLines=[];
 
-// Persist API key
-try{const s=localStorage.getItem('census_api_key');if(s)document.getElementById('apiKeyInput').value=s;}catch(e){}
-document.getElementById('apiKeyInput').addEventListener('change',function(){try{localStorage.setItem('census_api_key',this.value.trim());}catch(e){}});
+function dbg(msg){
+  debugLines.push('['+new Date().toISOString().slice(11,23)+'] '+msg);
+  const box=document.getElementById('debugBox');
+  if(box)box.textContent=debugLines.join('\n');
+}
+function toggleDebug(){
+  const box=document.getElementById('debugBox');
+  const tog=document.querySelector('.debug-toggle');
+  box.classList.toggle('show');
+  tog.textContent=box.classList.contains('show')?'▲ hide debug log':'▼ show debug log';
+}
+
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();runLookup();}});
-
 function addEx(v){const el=document.getElementById('districtInput');const c=el.value.trim();el.value=c?c+'\n'+v:v;el.focus();}
-function clearAll(){document.getElementById('districtInput').value='';document.getElementById('statusMsg').className='status';document.getElementById('resultsCard').style.display='none';currentResults={};currentKeys=[];}
+function clearAll(){document.getElementById('districtInput').value='';document.getElementById('statusMsg').className='status';document.getElementById('resultsCard').style.display='none';currentResults={};currentKeys=[];debugLines=[];document.getElementById('debugBox').textContent='';}
 function showStatus(type,msg){const el=document.getElementById('statusMsg');el.className='status show '+type;el.innerHTML=msg;}
 
 function parseDistricts(raw){
@@ -156,150 +155,181 @@ function parseDistricts(raw){
   });
 }
 
-function apiKey(){return document.getElementById('apiKeyInput').value.trim();}
-function kp(){const k=apiKey();return k?`&key=${k}`:'';}
+// ─── TIGERweb layer IDs ────────────────────────────────────────────────────────
+// Source: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/legislative/MapServer
+// Congressional Districts 119th Congress = layer 0 (current as of 2023+)
+// SLDU 2020 = layer 14 (State Legislative Districts - Upper - Census 2020)
+// SLDL 2020 = layer 16 (State Legislative Districts - Lower - Census 2020)
+// 
+// ZCTA service: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer
+// ZCTA5 2020 = layer 4
 
-async function censusGet(url){
+// GEOID formats:
+// CD: 2-char state FIPS + 2-char district = 4 chars total (e.g., FL CD-3 = "1203")
+// SLDU: 2-char state FIPS + 5-char district = 7 chars total (e.g., AL SD-1 = "0100001")  
+// SLDL: 2-char state FIPS + 5-char district = 7 chars total (e.g., TX HD-14 = "4800014")
+
+const TIGER_BASE = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb';
+const ZCTA_SERVICE = `${TIGER_BASE}/PUMA_TAD_TAZ_UGA_ZCTA/MapServer`;
+const LEG_SERVICE = `${TIGER_BASE}/legislative/MapServer`;
+
+// Layer IDs to try in order (in case the primary is wrong)
+const LAYER_IDS = {
+  CD: [0, 1, 2, 3],        // Try 119th, 118th, 117th, 116th
+  SD: [14, 22, 26, 6],     // Try multiple SLDU layer candidates
+  HD: [16, 24, 28, 8],     // Try multiple SLDL layer candidates
+};
+const ZCTA_LAYERS = [4, 2, 0, 6]; // ZCTA5 2020 candidates
+
+function makeGeoid(fips, num, type){
+  if(type==='CD') return fips + String(num).padStart(2,'0');      // 4 chars
+  return fips + String(num).padStart(5,'0');                       // 7 chars
+}
+
+async function tigerFetch(url){
+  dbg('GET '+url.replace(TIGER_BASE,'[TIGER]'));
   const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(),25000);
+  const timer=setTimeout(()=>ctrl.abort(),20000);
   try{
     const r=await fetch(url,{signal:ctrl.signal});
     clearTimeout(timer);
-    if(!r.ok){
-      const txt=await r.text().catch(()=>'');
-      throw new Error(`Census API ${r.status}${txt?': '+txt.slice(0,120):''}`);}
-    return await r.json();
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const j=await r.json();
+    if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+    return j;
   }catch(e){
     clearTimeout(timer);
-    if(e.name==='AbortError')throw new Error('Request timed out');
+    if(e.name==='AbortError')throw new Error('Timeout');
     throw e;
   }
 }
 
-// ─── Strategy A: Direct ZCTA-in-CD (only works for congressional districts) ──
-async function fetchCD(fips, distNum){
-  const dp=String(distNum).padStart(2,'0');
-  const url=`https://api.census.gov/data/2020/dec/pl?get=NAME&for=zip%20code%20tabulation%20area:*&in=state:${fips}%20congressional%20district:${dp}${kp()}`;
-  const data=await censusGet(url);
-  if(!Array.isArray(data)||data.length<2)return[];
-  const last=data[0].length-1;
-  return data.slice(1).map(r=>r[last]).filter(z=>/^\d{5}$/.test(z)).sort();
-}
-
-// ─── Strategy B: For SD/HD — query ZCTAs at state level, then get district 
-//     assignment for each ZCTA using the legislative district variable ────────
-// 
-// Census 2020 PL supports querying: for=state legislative district (upper chamber):*
-// in=state:XX  → returns all SLDUs in a state with their GEOIDs
-// 
-// Then we query: for=zip code tabulation area:* in=state:XX
-// and cross-reference using the geographic relationship.
-//
-// Actually the cleanest supported approach: use the ACS 5-year which has
-// ZCTA->SLDU relationship tables. But simpler: use Census geocoding relationship files
-// through the TIGERweb REST API (supports spatial queries, CORS-friendly).
-//
-// TIGERweb MapServer query:
-// https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/legislative/MapServer/{layer}/query
-// Layer 26 = State Senate (SLDU 2020)
-// Layer 28 = State House (SLDL 2020)  
-// Layer 30 = Congressional Districts 119th
-//
-// Approach: Get district polygon GEOID, then query ZCTAs that intersect it spatially.
-// TIGERweb supports this via its REST API with spatial intersect queries.
-
-async function fetchLegislative(fips, distNum, type){
-  // Step 1: Get the district's geometry via TIGERweb
-  // Layer IDs for TIGERweb legislative MapServer:
-  // SLDU 2020 = layer 26, SLDL 2020 = layer 28
-  const layerId = type === 'SD' ? 26 : 28;
-  const distPad = String(distNum).padStart(3,'0');
-  const geoid = fips + distPad;
+async function getDistrictBBox(fips, num, type){
+  const geoid=makeGeoid(fips,num,type);
+  const layers=LAYER_IDS[type];
+  const whereClause=encodeURIComponent(`GEOID='${geoid}'`);
   
-  // Query the district feature to get its envelope (bounding box)
-  const distUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/legislative/MapServer/${layerId}/query?where=GEOID%3D%27${geoid}%27&outFields=GEOID%2CNAME&returnGeometry=true&geometryPrecision=4&outSR=4326&f=json`;
-  
-  const distResp = await fetch(distUrl, {signal: AbortSignal.timeout(20000)});
-  if(!distResp.ok) throw new Error(`TIGERweb district query failed: ${distResp.status}`);
-  const distData = await distResp.json();
-  
-  if(!distData.features || distData.features.length === 0){
-    throw new Error(`District ${geoid} not found in TIGERweb`);
-  }
-  
-  // Get the district's bounding box
-  const extent = distData.extent || distData.features[0].geometry.rings ? getBBox(distData.features[0].geometry) : null;
-  if(!extent) throw new Error('Could not get district extent');
-  
-  // Step 2: Query ZCTAs that intersect this district's geometry
-  // Use the district geometry as a spatial filter against ZCTA layer
-  // TIGERweb ZCTA layer is in a different service
-  const geomParam = encodeURIComponent(JSON.stringify({
-    xmin: extent.xmin, ymin: extent.ymin,
-    xmax: extent.xmax, ymax: extent.ymax,
-    spatialReference: {wkid: 4326}
-  }));
-  
-  const zctaUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/2/query?geometry=${geomParam}&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&outFields=GEOID20&returnGeometry=false&f=json`;
-  
-  const zctaResp = await fetch(zctaUrl, {signal: AbortSignal.timeout(25000)});
-  if(!zctaResp.ok) throw new Error(`TIGERweb ZCTA query failed: ${zctaResp.status}`);
-  const zctaData = await zctaResp.json();
-  
-  if(!zctaData.features) return [];
-  return zctaData.features
-    .map(f => f.attributes.GEOID20 || f.attributes.geoid20 || '')
-    .filter(z => /^\d{5}$/.test(z))
-    .sort();
-}
-
-function getBBox(geometry){
-  // Compute bounding box from polygon rings
-  if(!geometry || !geometry.rings) return null;
-  let xmin=Infinity,ymin=Infinity,xmax=-Infinity,ymax=-Infinity;
-  for(const ring of geometry.rings){
-    for(const [x,y] of ring){
-      if(x<xmin)xmin=x; if(x>xmax)xmax=x;
-      if(y<ymin)ymin=y; if(y>ymax)ymax=y;
+  for(const layerId of layers){
+    try{
+      const url=`${LEG_SERVICE}/${layerId}/query?where=${whereClause}&outFields=GEOID,NAME&returnGeometry=true&geometryPrecision=4&outSR=4326&f=json`;
+      const data=await tigerFetch(url);
+      
+      if(!data.features||data.features.length===0){
+        dbg(`Layer ${layerId}: no features for GEOID=${geoid}`);
+        continue;
+      }
+      
+      const feat=data.features[0];
+      dbg(`Layer ${layerId}: found ${feat.attributes?.NAME||geoid}`);
+      
+      // Get bounding box from extent or compute from rings
+      let bbox;
+      if(data.extent){
+        bbox=data.extent;
+      } else if(feat.geometry&&feat.geometry.rings){
+        bbox=ringsToBBox(feat.geometry.rings);
+      }
+      
+      if(!bbox)throw new Error('No geometry extent');
+      dbg(`BBox: ${bbox.xmin.toFixed(3)},${bbox.ymin.toFixed(3)} to ${bbox.xmax.toFixed(3)},${bbox.ymax.toFixed(3)}`);
+      return bbox;
+    }catch(e){
+      dbg(`Layer ${layerId} error: ${e.message}`);
     }
+  }
+  throw new Error(`District not found in TIGERweb (tried layers ${layers.join(',')})`);
+}
+
+function ringsToBBox(rings){
+  let xmin=Infinity,ymin=Infinity,xmax=-Infinity,ymax=-Infinity;
+  for(const ring of rings)for(const [x,y] of ring){
+    if(x<xmin)xmin=x;if(x>xmax)xmax=x;
+    if(y<ymin)ymin=y;if(y>ymax)ymax=y;
   }
   return{xmin,ymin,xmax,ymax};
 }
 
+async function getZCTAsInBBox(bbox){
+  const geomParam=encodeURIComponent(JSON.stringify({
+    xmin:bbox.xmin,ymin:bbox.ymin,xmax:bbox.xmax,ymax:bbox.ymax,
+    spatialReference:{wkid:4326}
+  }));
+  
+  for(const layerId of ZCTA_LAYERS){
+    try{
+      const url=`${ZCTA_SERVICE}/${layerId}/query?geometry=${geomParam}&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&outFields=GEOID20,ZCTA5CE20,ZCTA5&returnGeometry=false&resultRecordCount=2000&f=json`;
+      const data=await tigerFetch(url);
+      
+      if(!data.features||data.features.length===0){
+        dbg(`ZCTA layer ${layerId}: no features`);
+        continue;
+      }
+      
+      dbg(`ZCTA layer ${layerId}: ${data.features.length} features`);
+      const zips=data.features.map(f=>{
+        const a=f.attributes;
+        return a.GEOID20||a.ZCTA5CE20||a.ZCTA5||'';
+      }).filter(z=>/^\d{5}$/.test(z)).sort();
+      
+      return[...new Set(zips)];
+    }catch(e){
+      dbg(`ZCTA layer ${layerId} error: ${e.message}`);
+    }
+  }
+  throw new Error('Could not query ZCTAs from TIGERweb');
+}
+
 async function fetchZIPs(d){
   const fips=FIPS[d.state];
-  if(d.type==='CD') return fetchCD(fips, d.num);
-  return fetchLegislative(fips, d.num, d.type);
+  dbg(`\n--- ${d.key} ---`);
+  const bbox=await getDistrictBBox(fips,d.num,d.type);
+  return getZCTAsInBBox(bbox);
 }
 
 async function runLookup(){
   const raw=document.getElementById('districtInput').value;
   if(!raw.trim())return;
+  debugLines=[];document.getElementById('debugBox').textContent='';
+  
   const parsed=parseDistricts(raw);
   const valid=parsed.filter(d=>d.valid);
   const invalid=parsed.filter(d=>!d.valid);
   if(!valid.length){showStatus('error','&#9888; No valid districts found.<br><small>Format: FL CD-3 &middot; AL SD-1 &middot; TX HD-14</small>');return;}
   const seen=new Set();
   const deduped=valid.filter(d=>{if(seen.has(d.key))return false;seen.add(d.key);return true;});
+  
   showStatus('loading',`<span class="spinner"></span>Looking up ${deduped.length} district${deduped.length>1?'s':''}...<div class="progress-bar-wrap"><div class="progress-bar" id="progBar"></div></div>`);
   document.getElementById('lookupBtn').disabled=true;
   document.getElementById('resultsCard').style.display='none';
   currentResults={};currentKeys=deduped.map(d=>d.key);
   const errors=[];let done=0;
+  
   for(const d of deduped){
-    try{currentResults[d.key]=await fetchZIPs(d);}
-    catch(e){currentResults[d.key]=[];errors.push(`${d.key}: ${e.message}`);}
+    try{
+      currentResults[d.key]=await fetchZIPs(d);
+      dbg(`${d.key}: ${currentResults[d.key].length} ZIPs found`);
+    }catch(e){
+      currentResults[d.key]=[];
+      errors.push(`${d.key}: ${e.message}`);
+      dbg(`${d.key} FAILED: ${e.message}`);
+    }
     done++;
     const bar=document.getElementById('progBar');
     if(bar)bar.style.width=Math.round((done/deduped.length)*100)+'%';
   }
+  
   document.getElementById('lookupBtn').disabled=false;
   const total=Object.values(currentResults).reduce((a,b)=>a+b.length,0);
   const ok=Object.values(currentResults).filter(z=>z.length>0).length;
+  
   if(ok===0&&errors.length>0){
-    showStatus('error',`&#9888; All lookups failed.<br><small>${errors.slice(0,4).join('<br>')}</small>`);
+    showStatus('error',`&#9888; All lookups failed. Check debug log below for details.<br><small>${errors.slice(0,3).join('<br>')}</small>`);
+    // Auto-show debug on failure
+    document.getElementById('debugBox').classList.add('show');
+    document.querySelector('.debug-toggle').textContent='▲ hide debug log';
     return;
   }
+  
   const skipMsg=invalid.length?` &middot; Skipped: ${invalid.map(d=>d.raw).join(', ')}`:'';
   const errMsg=errors.length?` &middot; ${errors.length} error(s)`:'';
   showStatus(errors.length?'warn':'success',`&#10003; Found ${total.toLocaleString()} ZIPs across ${ok}/${deduped.length} district${deduped.length>1?'s':''}.${errMsg}${skipMsg}`);
@@ -320,11 +350,11 @@ function renderResults(invalid=[],errors=[]){
   if(maxRows>500)rows+=`<tr>${keys.map(()=>`<td style="color:var(--text3);font-size:11px">...more in CSV</td>`).join('')}</tr>`;
   document.getElementById('tableBody').innerHTML=rows;
   const notices=[
-    'Sources: U.S. Census Bureau &mdash; Census API (CD lookups) + TIGERweb REST API (SD/HD spatial queries).',
-    'ZIPs reflect ZCTAs (ZIP Code Tabulation Areas) intersecting each district boundary.',
-    'ZCTAs approximate USPS ZIP codes but may not match 1:1 &mdash; verify against platform targeting.',
+    'Source: U.S. Census Bureau TIGERweb REST API &mdash; 2020 geographic boundaries.',
+    'ZIPs reflect ZCTAs (ZIP Code Tabulation Areas) intersecting each district bounding box.',
+    'Note: bounding-box intersection may include ZCTAs near but outside district borders &mdash; verify targeting.',
   ];
-  if(maxRows>500)notices.push(`Table preview capped at 500 rows. Full ${maxRows.toLocaleString()} ZIPs included in the CSV.`);
+  if(maxRows>500)notices.push(`Table preview capped at 500 rows. Full ${maxRows.toLocaleString()} ZIPs in the CSV.`);
   document.getElementById('noticeBlock').innerHTML=notices.join('<br>');
   document.getElementById('resultsCard').style.display='block';
 }
